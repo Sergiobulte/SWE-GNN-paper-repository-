@@ -46,7 +46,7 @@ def get_model_name(model):
         return model.type_model
 
 def get_numerical_times(test_size, temporal_res, maximum_time,
-                        overview_file='database/raw_datasets/overview.csv',
+                        overview_file='/scratch/sbulte/SWE-GNN-paper-repository-/database/raw_Dataset200/overview.csv',
                         **temporal_test_dataset_parameters):
 
     time_start = temporal_test_dataset_parameters['time_start']
@@ -58,7 +58,7 @@ def get_numerical_times(test_size, temporal_res, maximum_time,
 
     numerical_simulation_overview = pd.read_csv(overview_file, sep=',')
 
-    small_test_id = numerical_simulation_overview['seed'].isin(np.arange(500,520))
+    test_id = numerical_simulation_overview['seed'].isin(np.arange(91,102))
     random_breach_test_id = numerical_simulation_overview['seed'].isin(np.arange(10001,10021))
     big_random_breach_test_id = numerical_simulation_overview['seed'].isin(np.arange(15001,15011))
 
@@ -69,7 +69,7 @@ def get_numerical_times(test_size, temporal_res, maximum_time,
         ids = big_random_breach_test_id
         test_size = 10
     else:
-        ids = small_test_id
+        ids = test_id
 
     computation_time = numerical_simulation_overview.loc[ids]['computation_time[s]']
 

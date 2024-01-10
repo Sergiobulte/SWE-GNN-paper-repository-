@@ -40,6 +40,7 @@ class Trainer(object):
         self.val_losses = []
         self.CSI_005 = []
         self.CSI_03 = []
+        self.conservation_loss = []
 
         self.early_stop = 0
         self.best_val_loss = 1
@@ -129,6 +130,9 @@ class Trainer(object):
                 CSI_005 = self.spatial_analyser._get_CSI(water_threshold=0.05).mean()
                 CSI_03 = self.spatial_analyser._get_CSI(water_threshold=0.3).mean()
                                 
+                # mass conservation validation
+                #conservation_loss = self.spatial_analyser._get_mass_loss_in_time().mean(1).abs().mean()
+
                 progress_bar.set_description(f"\tTrain loss = {train_loss:4.4f}   "\
                                             f"Valid loss = {val_loss:1.4f}    "\
                                             rf"CSI_0.05 = {CSI_005:.3f}"\
@@ -138,11 +142,13 @@ class Trainer(object):
                            "valid_loss": val_loss,
                            r"CSI_0.05": CSI_005,
                            r"CSI_0.3": CSI_03})
+                           #"Conservation loss": conservation_loss
 
                 self.train_losses.append(train_loss)
                 self.val_losses.append(val_loss) 
                 self.CSI_005.append(CSI_005) 
                 self.CSI_03.append(CSI_03) 
+                # tijdelijk self.conservation_loss.append(conservation_loss) 
                 
                 self._use_learning_rate_scheduler()
                 self._update_best_model(model)
@@ -160,6 +166,7 @@ class Trainer(object):
                    "valid_loss": min_val_loss,
                    r"CSI_0.05": self.CSI_005[argmin_val_loss],
                    r"CSI_0.3": self.CSI_03[argmin_val_loss]})
+                   # tijdelijk f"Conservation loss": self.conservation_loss[argmin_val_loss]
 
         try:
             print("Loading best model...")
@@ -167,14 +174,14 @@ class Trainer(object):
         except:
             pass #avoid blocking processes even if loss is very bad
 
-    def _save_model(self, model, model_name="best_model.h5", save_dir=None):
+    def _save_model(self, model, model_name="secondmodel", save_dir=None):
         '''Save model in directory'''
         if save_dir is None:
             save_dir = wandb.run.dir
         save_dir = os.path.join(save_dir, model_name)
         torch.save(model.state_dict(), save_dir)
 
-    def _load_model(self, model, model_name="best_model.h5", save_dir=None):
+    def _load_model(self, model, model_name="secondmodel", save_dir=None):
         '''Load model from directory'''
         if save_dir is None:
             save_dir = wandb.run.dir

@@ -6,6 +6,7 @@ def get_none_scalers():
     none_scalers = {'DEM_scaler' : None, 
                     # 'slope_scaler' : None, 
                     'WD_scaler' : None, 
+                    'edge_slope_scaler' : None, 
                     'V_scaler' : None}
     return none_scalers
 

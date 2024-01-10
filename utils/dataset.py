@@ -1,6 +1,7 @@
 # Libraries
 import torch
 from torch_geometric.data import Data
+import pickle
 
 from utils.load import load_dataset
 from utils.scaling import get_scalers
@@ -40,6 +41,40 @@ def slopes_from_DEM(DEM):
     slope_x, slope_y = torch.gradient(DEM)
     return slope_x.reshape(-1), slope_y.reshape(-1)
 
+def fill_domain_nan(pos, DEM):
+    '''
+    If the domain is not a square, use this part of code to give the masked parts a ''nan'' value in order to properly compute the slopes
+    '''
+    #Define coordinates of ''box'' around DEM
+    min_x = min(coord[0] for coord in pos)
+    max_x = max(coord[0] for coord in pos)
+    min_y = min(coord[1] for coord in pos)
+    max_y = max(coord[1] for coord in pos)
+
+    boxwidth = int((max_x - min_x)/100 + 1)
+    boxheight = int((max_y - min_y)/100 + 1)
+
+    #Then we create the box around the existing domain, fill it all with nan values and then overwrite it with our DEM
+    DEM_slopecalc = torch.full((boxwidth, boxheight), float('nan') ) 
+
+    for i, xy in enumerate(pos):
+        xs , ys = int((xy[0] - min_x)/100), int((xy[1] - min_y)/100)
+        DEM_slopecalc[xs, ys] = DEM[i]
+    return DEM_slopecalc
+
+def correct_nan_slopes(slope_x, slope_y, DEM_slope):
+    mask = ~torch.isnan(DEM_slope.reshape(-1))
+
+    masked_slope_x = slope_x[mask]
+    mask2 = torch.isnan(masked_slope_x)
+    masked_slope_x[mask2] = 0
+
+    masked_slope_y = slope_y[mask]
+    mask2 = torch.isnan(masked_slope_y)
+    masked_slope_y[mask2] = 0
+
+    return masked_slope_x , masked_slope_y
+
 def get_temporal_res(matrix, temporal_res=30):
     '''
     extracts a sub-matrix with time_step [min] from a temporal matrix [N, T]
@@ -49,7 +84,7 @@ def get_temporal_res(matrix, temporal_res=30):
     time_step: int
         selects the desired time step for the temporal resolution
     '''
-    selected_times = torch.arange(0, matrix.shape[-1], temporal_res/30, dtype=int)
+    selected_times = torch.arange(0, matrix.shape[-1], temporal_res/60, dtype=int)
         
     return matrix[:, selected_times]
 
@@ -80,8 +115,12 @@ def get_node_features(data=None, scalers=None, slope_x=True, slope_y=True,
 
     if slope_x or slope_y:
         number_grids = int(data.DEM.shape[0]**0.5)
-        slopex, slopey = slopes_from_DEM(data.DEM.reshape(number_grids, number_grids))
-
+        if number_grids == 64:
+            slopex, slopey = slopes_from_DEM(data.DEM.reshape(number_grids, number_grids))
+        else:
+            DEM_slope = fill_domain_nan(data.pos, data.DEM)
+            slopex, slopey = slopes_from_DEM(DEM_slope)
+            slopex, slopey = correct_nan_slopes(slopex, slopey, DEM_slope)
         if slope_x:
             node_features['slope_x'] = process_attr(slopex, scaler=scalers['slope_scaler'], device=device)
         
@@ -89,6 +128,7 @@ def get_node_features(data=None, scalers=None, slope_x=True, slope_y=True,
             node_features['slope_y'] = process_attr(slopey, scaler=scalers['slope_scaler'], device=device)
         
         slopex, slopey = 0, 0
+        DEM_slope = 0
 
     if DEM:
         node_features['DEM'] = process_attr(data.DEM, scaler=scalers['DEM_scaler'], to_min=True, device=device)
@@ -224,8 +264,8 @@ def create_data_attr(datasets, scalers=None, temporal_res=60, device='cpu', **se
     return new_dataset
 
 
-def create_model_dataset(dataset_name, train_size=100, val_prcnt=0.3, test_size=50, 
-                         dataset_folder='database\\datasets',
+def create_model_dataset(train_dataset_name, test_dataset_name, train_size, val_prcnt, test_size, 
+                         dataset_folder='C:/Users/bulte/SWE-GNN-paper-repository-/database/datasets200',
                          scalers=None, seed=42, device='cpu', **dataset_parameters):
     '''
     Create dataset with scaled node and edge attributes
@@ -251,16 +291,21 @@ def create_model_dataset(dataset_name, train_size=100, val_prcnt=0.3, test_size=
             selects the desired time step for the temporal resolution
     '''
     # Load datasets
-    train_dataset = load_dataset(dataset_name, train_size, seed, dataset_folder+'/train')
+    train_dataset = load_dataset(train_dataset_name, train_size, seed, dataset_folder+'/train')
     # create validation dataset from training
     train_dataset, val_dataset = train_test_split(train_dataset, test_size=val_prcnt, random_state=seed)
     if test_size == 'big' or test_size == 'big_random_breach':
         test_dataset = load_dataset('big_random_breach_grid', 10, seed=0, dataset_folder=dataset_folder+'/test')
     elif test_size == 'random_breach':
         test_dataset = load_dataset('random_breach_grid', 20, seed=0, dataset_folder=dataset_folder+'/test')
+    elif test_size == 'dr49':
+        test_dataset = load_dataset('DR49', 10, seed=0, dataset_folder=dataset_folder+'/test')
+    elif test_size == 'DR49_test':
+        test_dataset = load_dataset('DR49_test', 10, seed=0, dataset_folder=dataset_folder+'/test')
     else:
-        test_dataset = load_dataset(dataset_name, test_size, seed=0, dataset_folder=dataset_folder+'/test')
+        test_dataset = load_dataset(test_dataset_name, test_size, seed=0, dataset_folder=dataset_folder+'/test')
     
+
     # Normalization
     scalers = get_scalers(train_dataset, scalers)
     
@@ -491,7 +536,7 @@ def load_val_test_dataset(config):
     selected_edge_features = config['selected_edge_features']
 
     _, val_dataset, test_dataset, scalers = create_model_dataset(
-        'grid', scalers=scalers, device=device, **dataset_parameters,
+        'DR49_train', 'DR49_test', scalers=scalers, device=device, **dataset_parameters,
         **selected_node_features, **selected_edge_features
     )
 

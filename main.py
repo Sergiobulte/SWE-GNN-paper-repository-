@@ -32,14 +32,18 @@ def main(config):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     dataset_parameters = config.dataset_parameters
+    train_dataset_name = 'DR49_train'
+    test_dataset_name = 'DR49_test'
     scalers = config.scalers
     selected_node_features = config.selected_node_features
     selected_edge_features = config.selected_edge_features
 
     train_dataset, val_dataset, test_dataset, scalers = create_model_dataset(
-        'grid', scalers=scalers, device=device, **dataset_parameters,
+        train_dataset_name, test_dataset_name, scalers=scalers, device=device, **dataset_parameters,
         **selected_node_features, **selected_edge_features
     )
+
+    
 
     temporal_dataset_parameters = config.temporal_dataset_parameters
 
@@ -106,13 +110,15 @@ def main(config):
     maximum_time = test_dataset[0].WD.shape[1]
     numerical_times = get_numerical_times(test_size, temporal_res, maximum_time, 
                     **temporal_test_dataset_parameters,
-                    overview_file='database/raw_datasets/overview.csv')
+                    overview_file='/scratch/sbulte/SWE-GNN-paper-repository-/database/raw_Dataset200/overview.csv')
+    print(numerical_times)
 
     # Rollout error and time
     spatial_analyser = SpatialAnalysis(model, test_dataset, **temporal_test_dataset_parameters)
     rollout_loss = spatial_analyser._get_rollout_loss(type_loss=trainer.type_loss)
     model_times = spatial_analyser.prediction_times
-                                        
+    print(model_times)
+                                   
     print('test roll loss WD:',rollout_loss.mean(0)[0].item())
     print('test roll loss V:',rollout_loss.mean(0)[1:].mean().item())
 

@@ -1,11 +1,11 @@
 # dataset creation parameters
 dataset_parameters:
-  database_folder: 'database/datasets'  # datasets location
+  database_folder: '/scratch/sbulte/SWE-GNN-paper-repository-/database/datasets200'  # datasets location
   temporal_res: 60      # temporal resolution
-  train_size: 80        # training set size
+  train_size: 90        # training set size
   val_prcnt: 0.25       # percentage of validation sample from training dataset
   test_size: 10         # choose from: value(1,20), 'random_breach', 'big'
-  seed: 111             # seed for randomness in training/validation split
+  seed: 4444             # seed for randomness in training/validation split
 
 # Scaler options: null, 'minmax', 'minmax_neg', or 'standard'
 # CURRENTLY THEY ARE NOT USED SO THEY MIGHT GIVE ERRORS BUT IF YOU WANT TRY THEM!
@@ -30,7 +30,7 @@ selected_edge_features :
 
 # temporal training dataset
 temporal_dataset_parameters:
-  rollout_steps : 8       # number of steps ahead during training
+  rollout_steps : 3       # number of steps ahead during training
   previous_t    : 2       # input previous time steps
   time_start    : 1       # starting time step (default 1)
   time_stop     : -1      # ending time step (if -1 you take the full simulation)
@@ -67,11 +67,11 @@ models:
 trainer_options:
   type_loss         : 'RMSE'        # 'RMSE' or 'MAE'
   only_where_water  : True          # Calculate loss only where there's water
-  batch_size        : 8             # batch size
+  batch_size        : 10             # batch size
   velocity_scaler   : 3             # weighting coefficient for velocity in loss (eq. 14)
   curriculum_epoch  : 15            # number of epochs before updating curriculum strategy
   patience          : 30            # patience for early stopping
-  max_epochs        : 150           # maximum number of epochs
+  max_epochs        : 100           # maximum number of epochs
   report_freq       : 5             # frquency to report loss in print
 
 # learning rate (optimizer parameters)

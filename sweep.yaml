@@ -1,0 +1,48 @@
+method: bayes
+metric:
+  goal: minimize
+  name: min_val_loss
+run_cap: 100
+parameters:
+  lr_info.gamma:
+    distribution: uniform
+    max: 1.8
+    min: 0.45
+  lr_info.learning_rate:
+    distribution: uniform
+    max: 0.014
+    min: 0.0035
+  lr_info.step_size:
+    distribution: int_uniform
+    max: 14
+    min: 4
+  lr_info.weight_decay:
+    value: 0
+  models.K:
+    distribution: int_uniform
+    max: 18
+    min: 6
+  models.hid_features:
+    distribution: int_uniform
+    max: 128
+    min: 32
+  models.model_type:
+    value: 'GNN'
+  models.type_GNN:
+    value: "SWE-GNN"
+  models.gnn_activation:
+    value: 'tanh'
+  models.dropout:
+    value: 0
+  models.mlp_layers:
+    value: 2
+  models.mlp_activation:
+    value: 'prelu'
+  models.seed:
+    value: 4444
+  models.with_filter_matrix:
+    value: True
+  models.with_gradient:
+    value: True
+  models.with_WL:
+    value: True

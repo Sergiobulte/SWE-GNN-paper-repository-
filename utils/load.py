@@ -16,7 +16,7 @@ def read_config(config_file):
     return cfg
 
     
-def load_dataset(dataset_name, size, seed=42, dataset_folder='database/datasets'):
+def load_dataset(dataset_name, size, seed=42, dataset_folder='C:/Users/bulte/SWE-GNN-paper-repository-/database/datasets200'):
     '''
     Loads dataset, composed by a list of pytorch geometric data objects
     ------
@@ -26,8 +26,8 @@ def load_dataset(dataset_name, size, seed=42, dataset_folder='database/datasets'
     size: int
         number of simulations selected
     '''
-    if size > 80:
-        raise FileNotFoundError('maximum training dataset size is 80')
+    # if size > 80:
+    #     raise FileNotFoundError('maximum training dataset size is 80')
         
     path = f"{dataset_folder}/{dataset_name}.pkl"
     

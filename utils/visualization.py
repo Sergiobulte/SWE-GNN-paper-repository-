@@ -12,6 +12,8 @@ from utils.miscellaneous import get_time_vector, get_rollout_loss, get_CSI, get_
 from utils.dataset import get_input_water, get_breach_coordinates
 from training.loss import get_mean_error
 from utils.scaling import get_none_scalers
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 WD_color = LinearSegmentedColormap.from_list('', ['white', 'MediumBlue'])
 V_color = LinearSegmentedColormap.from_list('', ['white', 'darkviolet'])
@@ -263,7 +265,7 @@ class TemporalPlotMap(BasePlotMap):
         self.time_in_minutes = (self.time_start + 1 + self.time_step%self.total_time)*self.temporal_res
         self.time_in_hours = self.time_in_minutes/60
     
-    def plot_map(self, time_step, ax=None, colorbar=True):
+    def plot_map(self, time_step, ax=None, colorbar=True, alpha=1.0):
         self.time_step = time_step
         self._get_current_time_step()
         map = self._get_map_at_time_step(self.map)
@@ -278,22 +280,53 @@ class TemporalPlotMap(BasePlotMap):
         if self.graph is not None:
             '''Plot map as graph'''
             nx.draw_networkx_nodes(self.graph, pos=self.pos, node_color=map, node_shape='s', node_size=20, 
-                                   ax=ax, **self.kwargs)
+                                   ax=ax, alpha=alpha, **self.kwargs)
         elif self.mesh is not None:
             '''Plot map as mesh'''
             coordinates = get_coords(self.pos)
             X = coordinates[:,0]
             Y = coordinates[:,1]
-            ax.tricontourf(X, Y, self.mesh.simplices, map, levels=48,**self.kwargs)
+            ax.tricontourf(X, Y, self.mesh.simplices, map, levels=48,alpha=alpha,**self.kwargs)
             ax.triplot(X, Y, self.mesh.simplices, linewidth=0.1, c='black')
 
         return ax
+    
+    #Alles hieronder is eigenlijk fout
+    def get_image(self, time_step, ax=None, colorbar=True, alpha=1.0):
+        ax = self.plot_map(time_step=time_step, ax=ax, colorbar=colorbar, alpha=alpha)
+        if ax is not None:
+            return ax.get_images()[0]
+        return None
+
+    def plot_map_with_transparency(self, time_step, ax=None, colorbar=True, alpha=1.0):
+        im = self.get_image(time_step=time_step, ax=ax, colorbar=colorbar, alpha=alpha)
+
+        # Set alpha channel for the plotted map
+        if im is not None:
+            im.set_array(np.where(self.get_array() > 0, im.get_array(), 0))
+
+        return im
+
+
+
 
 class DEMPlotMap(BasePlotMap):
     '''Plot digital elevation model(DEM)'''
     def __init__(self, map, **map_kwargs):
         super().__init__(map, **map_kwargs)
-        self.kwargs['cmap'] = 'terrain'
+
+        low_color = 'green'
+        middle_color = 'yellow'
+        high_color = 'brown'
+
+        colors = [low_color, middle_color, high_color]
+        positions = [0.0, 0.5, 1.0]
+
+        cmap_name = "custom_elevation_cmap"
+        custom_elevation_cmap = LinearSegmentedColormap.from_list(cmap_name, list(zip(positions, colors)))
+
+        # Set the custom colormap
+        self.kwargs['cmap'] = custom_elevation_cmap
         
     def _add_axes_info(self, ax):
         ax.set_title('DEM (m)')
@@ -421,10 +454,25 @@ class PlotRollout():
         
         self.predicted_rollout, self.real_rollout, self.prediction_time = get_rollouts(
             model, dataset, **temporal_test_dataset_parameters)
+        
+        #####################
+        #For dikering 43, comment for 49
+        # coordinates = get_coords(pos)
+        # mask = coordinates[:,0] > 172100
+        # coordinates = coordinates[mask]
+        # self.predicted_rollout = self.predicted_rollout[mask]
+        # self.real_rollout = self.real_rollout[mask]
+        # pos = {i:(x+0.5,y+0.5) for i, (x,y) in enumerate(coordinates)}
+
+        # default_plot_kwargs = {'pos':pos, 'graph':graph, 'mesh':mesh}
+        # self.default_temporal_plot_kwargs = default_plot_kwargs|\
+        #     {'time_start': self.time_start, 'temporal_res':self.temporal_res}
+        #####################
+
         self.diff_rollout = self.predicted_rollout - self.real_rollout
         self.input_water = get_input_water(dataset, self.time_start)
 
-        self.breach_coordinates = get_breach_coordinates(self.dataset.WD, pos)
+        # self.breach_coordinates = get_breach_coordinates(self.dataset.WD, pos)
 
         self._get_maxs(self.real_rollout, self.predicted_rollout, self.diff_rollout)
         
@@ -456,8 +504,8 @@ class PlotRollout():
         self.DEM = self.dataset.DEM
         DEMPlot = DEMPlotMap(self.DEM, **self.default_plot_kwargs)
         DEMPlot.plot_map(ax=ax)
-        DEMPlot._add_axes_info(ax=ax)
-        DEMPlot._add_breach_location(ax=ax, breach_coordinates=self.breach_coordinates)
+        #DEMPlot._add_axes_info(ax=ax)
+        # DEMPlot._add_breach_location(ax=ax, breach_coordinates=self.breach_coordinates)
 
     def _get_WDPlots(self, real_rollout, predicted_rollout, diff_rollout):
         real_WD = TemporalPlotMap(real_rollout[:,0,:], 
@@ -524,6 +572,33 @@ class PlotRollout():
         self.difference_V.plot_map(time_step=-1, ax=axs[1,3])
                             
         return fig
+    
+    def DEM_with_water(self):
+        # Create a figure for real WD
+        fig_real_WD, ax_real_WD = plt.subplots(1, 1, figsize=(12, 6), facecolor='white')
+
+        # Plot DEM
+        self._plot_DEM(ax=ax_real_WD)
+
+        # Plot real water depth using plot_map_with_transparency method to overlay on DEM
+        self.real_WD.plot_map_with_transparency(time_step=-1, ax=ax_real_WD, colorbar=True, alpha=0.7)
+        ax_real_WD.set_ylabel('Water depth [m]')
+        ax_real_WD.set_title('Ground-truth')
+
+        # Create a figure for predicted WD
+        fig_pred_WD, ax_pred_WD = plt.subplots(1, 1, figsize=(12, 6), facecolor='white')
+
+        # Plot DEM
+        self._plot_DEM(ax=ax_pred_WD)
+
+        # Plot predicted water depth using plot_map_with_transparency method to overlay on DEM
+        self.predicted_WD.plot_map_with_transparency(time_step=-1, ax=ax_pred_WD, colorbar=True, alpha=0.7)
+        ax_pred_WD.set_ylabel('Water depth [m]')
+        ax_pred_WD.set_title('Predicted')
+
+        return fig_real_WD, fig_pred_WD
+
+
     
     def compare_h_rollout(self, plot_times=[1,6,24,40]):
         self.plot_times = plot_times + [-1] #add final time step
