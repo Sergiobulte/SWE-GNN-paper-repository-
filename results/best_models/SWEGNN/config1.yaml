@@ -39,14 +39,14 @@ temporal_dataset_parameters:
 models:
     model_type        : 'GNN'
     type_GNN          : "SWEGNN"
-    hid_features      : 64
+    hid_features      : 16
     n_GNN_layers      : 1
     mlp_layers        : 2
     mlp_activation    : 'prelu'
     gnn_activation    : 'tanh'
     dropout           : 0
     seed              : 4444
-    K                 : 8
+    K                 : 14
     edge_mlp          : True
     normalize         : True
     with_filter_matrix: True
@@ -56,19 +56,19 @@ models:
 trainer_options:
   type_loss         : 'RMSE'
   only_where_water  : True
-  batch_size        : 10
+  batch_size        : 16
   velocity_scaler   : 3
-  curriculum_epoch  : 15
+  curriculum_epoch  : 25
   patience          : 30
-  max_epochs        : 100
+  max_epochs        : 150
   report_freq       : 5
 
 # learning rate
 lr_info:
     learning_rate   : 0.007
     weight_decay    : 0
-    gamma           : 0.9
-    step_size       : 7
+    gamma           : 0.7
+    step_size       : 15
 
 temporal_test_dataset_parameters:
   time_start  : 1

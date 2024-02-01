@@ -110,7 +110,7 @@ def main(config):
     maximum_time = test_dataset[0].WD.shape[1]
     numerical_times = get_numerical_times(test_size, temporal_res, maximum_time, 
                     **temporal_test_dataset_parameters,
-                    overview_file='/scratch/sbulte/SWE-GNN-paper-repository-/database/raw_Dataset200/overview.csv')
+                    overview_file='C:/Users/bulte/OneDrive - Stichting Deltares/Documents/GitHub/SWE-GNN-paper-repository-/database/Dataset200/overview.csv')
     print(numerical_times)
 
     # Rollout error and time
@@ -123,11 +123,11 @@ def main(config):
     print('test roll loss V:',rollout_loss.mean(0)[1:].mean().item())
 
     # Speed up
-    avg_speedup, std_speedup = calculate_speed_ups(numerical_times, model_times)
+    #avg_speedup, std_speedup = calculate_speed_ups(numerical_times, model_times)
 
-    wandb.log({"speed-up": avg_speedup,
-               "test roll loss WD":rollout_loss.mean(0)[0].item(),
-               "test roll loss V":rollout_loss.mean(0)[1:].mean().item()})
+    #wandb.log({"speed-up": avg_speedup,
+    #           "test roll loss WD":rollout_loss.mean(0)[0].item(),
+    #           "test roll loss V":rollout_loss.mean(0)[1:].mean().item()})
 
     spatial_analyser = SpatialAnalysis(model, test_dataset, **temporal_test_dataset_parameters)
 

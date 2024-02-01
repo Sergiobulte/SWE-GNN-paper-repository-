@@ -14,6 +14,7 @@ import torch
 from torch_geometric.data import Data
 from shapely.geometry import Polygon
 import xarray as xr
+from torch_geometric.utils import to_undirected
 # from meshkernel import MeshKernel, Mesh2d, GeometryList, OrthogonalizationParameters, ProjectToLandBoundaryOption, MeshRefinementParameters
 
 import sys
@@ -137,11 +138,11 @@ def create_mesh_triangle(vertices, segments=None, holes=None, max_area=5, max_sm
 def create_mesh(polygon_file='random_polygon.pol', max_refinement_iterations=3, orthogonalize_mesh=False):
     '''Creates a mesh using meshkernel'''
     # mesh = create_mesh_triangle(vertices, segments=None, holes=None, max_area=max_area, max_smallest_mesh_angle=30)
-    # mesh2d = Mesh2d(node_x=np.array(mesh['vertices'][:,0], dtype=np.float64),
+    # Mesh2d = Mesh2d(node_x=np.array(mesh['vertices'][:,0], dtype=np.float64),
     #             node_y=np.array(mesh['vertices'][:,1], dtype=np.float64),
     #             edge_nodes=mesh['edges'].ravel())
     # mk = MeshKernel()
-    # mk.mesh2d_set(mesh2d)
+    # mk.Mesh2d_set(Mesh2d)
 
     with open(polygon_file) as file:
         xy = np.array([[value for value in line.strip().split(",")] for line in file.readlines()[2:]], dtype=np.double)
@@ -160,28 +161,28 @@ def create_mesh(polygon_file='random_polygon.pol', max_refinement_iterations=3, 
     polygon = land_boundary = GeometryList(land_boundary_x, land_boundary_y)
 
     mk = MeshKernel()
-    mk.mesh2d_make_mesh_from_polygon(polygon)
+    mk.Mesh2d_make_mesh_from_polygon(polygon)
     refinement_parameters = MeshRefinementParameters(refine_intersected=True, min_edge_size=0, 
                                                      max_refinement_iterations=max_refinement_iterations, 
                                                      smoothing_iterations=5)
-    mk.mesh2d_refine_based_on_polygon(polygon, refinement_parameters)
+    mk.Mesh2d_refine_based_on_polygon(polygon, refinement_parameters)
 
     if orthogonalize_mesh:
-        mk.mesh2d_compute_orthogonalization(ProjectToLandBoundaryOption(0), OrthogonalizationParameters(
+        mk.Mesh2d_compute_orthogonalization(ProjectToLandBoundaryOption(0), OrthogonalizationParameters(
             outer_iterations=25, boundary_iterations=25, inner_iterations=25, 
             orthogonalization_to_smoothing_factor=0.95),
             polygon, land_boundary)
 
-    mk.mesh2d_delete_small_flow_edges_and_small_triangles(
+    mk.Mesh2d_delete_small_flow_edges_and_small_triangles(
         small_flow_edges_length_threshold=0.1, min_fractional_area_triangles=2)
 
-    output_mesh2d = mk.mesh2d_get()
+    output_Mesh2d = mk.Mesh2d_get()
 
-    output_mesh2d.mesh_nodes = np.stack((output_mesh2d.node_x, output_mesh2d.node_y), -1)
-    output_mesh2d.dual_nodes = np.stack((output_mesh2d.face_x, output_mesh2d.face_y), -1)
-    # output_mesh2d.face_nodes = get_face_nodes_mesh(output_mesh2d)
+    output_Mesh2d.mesh_nodes = np.stack((output_Mesh2d.node_x, output_Mesh2d.node_y), -1)
+    output_Mesh2d.dual_nodes = np.stack((output_Mesh2d.face_x, output_Mesh2d.face_y), -1)
+    # output_Mesh2d.face_nodes = get_face_nodes_mesh(output_Mesh2d)
 
-    return output_mesh2d
+    return output_Mesh2d
 
 def get_face_nodes_mesh(mesh):
     num_faces = mesh.face_x.shape[0]
@@ -203,14 +204,14 @@ def save_mesh(mesh, mesh_file, grid_size):
     #     mesh.node_x = mesh.node_x*grid_size
     #     mesh.node_y = mesh.node_y*grid_size
 
-    #     # 1. Convert a meshkernel mesh2d to an ugrid mesh2d
-    #     mesh2d_ugrid = ug.from_meshkernel_mesh2d_to_ugrid_mesh2d(mesh2d=mesh, name="Mesh2d", is_spherical=False)
+    #     # 1. Convert a meshkernel Mesh2d to an ugrid Mesh2d
+    #     Mesh2d_ugrid = ug.from_meshkernel_Mesh2d_to_ugrid_Mesh2d(Mesh2d=mesh, name="Mesh2d", is_spherical=False)
 
-    #     # 2. Define a new mesh2d
-    #     topology_id = ug.mesh2d_define(mesh2d_ugrid)
+    #     # 2. Define a new Mesh2d
+    #     topology_id = ug.Mesh2d_define(Mesh2d_ugrid)
 
-    #     # 3. Put a new mesh2d
-    #     ug.mesh2d_put(topology_id, mesh2d_ugrid)
+    #     # 3. Put a new Mesh2d
+    #     ug.Mesh2d_put(topology_id, Mesh2d_ugrid)
 
     #     # 4. Add crs to file
     #     attribute_dict = {
@@ -271,13 +272,51 @@ def get_polygon_area(x, y):
 
 class Mesh(object):
     def __init__(self):
-        '''Mixed-elements mesh base object'''
+        '''Mixed-elements mesh base object
+        ------
+        node_x: np.array, shape (num_nodes,)
+            x coordinates of each node
+        node_y: np.array, shape (num_nodes,)
+            y coordinates of each node
+        face_x: np.array, shape (num_faces,)
+            x coordinates of each face
+        face_y: np.array, shape (num_faces,)
+            y coordinates of each face
+        edge_index: np.array, shape (2, num_edges)
+            index of connected nodes
+        edge_type: np.array, shape (num_edges,)
+            type of each edge (1:normal edges, 2:edge with boundary condition, 3:other boundary edges)
+        dual_edge_index: np.array, shape (2, num_dual_edges)
+            index of connected faces
+        face_nodes: np.array, shape (num_faces*nodes_per_face,)
+            index of the nodes that define each face
+        nodes_per_face: np.array, shape (num_faces,)
+            number of nodes that define each face
+        '''
         self.added_ghost_cells = False
         self.node_x = np.array([])
         self.face_x = np.array([])
-        self.edge_index = np.array([])
+        self.edge_index = np.array([[]])
+        self.dual_edge_index = np.array([[]])
 
     def _import_from_netcdf(self, nc_file):
+        """Import mesh from map netcdf file (the output of DHYDRO)
+
+        -------
+        Adds the following attributes:
+        edge_index_BC: np.array, shape (num_edges_BC, 2)
+            index of the edges that have boundary conditions
+        face_BC: np.array, shape (num_faces_BC,)
+            index of the faces that have boundary conditions
+        edge_BC: np.array, shape (num_edges_BC,)
+            index of the edges that have boundary conditions
+        extra_face_BC: np.array, shape (num_extra_faces_BC,)
+            index of the faces that are in the boundary but with no boundary conditions
+        
+        -------
+        Updates the following attributes:
+        dual_edge_index: removes the edges that are in the boundary but with no boundary conditions
+        """
         nc_dataset = xr.open_dataset(nc_file)
         self.node_x = nc_dataset['Mesh2d_node_x'].data
         self.node_y = nc_dataset['Mesh2d_node_y'].data
@@ -286,7 +325,7 @@ class Mesh(object):
         self.face_y = nc_dataset['Mesh2d_face_y'].data
 
         self.edge_index = nc_dataset['Mesh2d_edge_nodes'].data.T - 1
-        self.edge_type = nc_dataset['Mesh2d_edge_type'].data # 1:normal edges, 2:BC_edge, 3:other BC_edges
+        self.edge_type = nc_dataset['Mesh2d_edge_type'].data # 1:normal edges, 2:BC_edge, 3:other boundary edges
         nc_dataset['Mesh2d_edge_faces'].data[nc_dataset['Mesh2d_edge_faces'].to_masked_array().mask] = 0
         self.dual_edge_index = nc_dataset['Mesh2d_edge_faces'].data.T.astype(int) - 1
 
@@ -311,10 +350,42 @@ class Mesh(object):
 
         total_face_bnd_mask = extra_face_bnd_mask | face_bnd_mask
         self.dual_edge_index = self.dual_edge_index[:,~total_face_bnd_mask]
+        self.dual_edge_index = to_undirected(torch.LongTensor(self.dual_edge_index)).numpy() #convert to undirected graph
+        self._get_derived_attributes()
 
     def _get_derived_attributes(self):
+              
+        """Calculate derived attributes from the mesh
+        ------
+        node_xy: np.array
+            x and y coordinates of each node
+        num_nodes: int
+            number of nodes in the mesh
+        boundary_nodes: np.array
+            x and y coordinates of each boundary node
+        edge_relative_distance: np.array
+            relative distance between the nodes that define each edge
+        edge_length: np.array
+            length of each edge
+        edge_outward_normal: np.array
+            outward normal of each edge
+        num_edges: int
+            number of edges in the mesh
+        face_xy: np.array
+            x and y coordinates of each face
+        face_relative_distance: np.array
+            relative distance between the faces that define each edge
+        dual_edge_length: np.array
+            length of each dual edge
+        num_faces: int
+            number of faces in the mesh
+        face_area: np.array 
+            area of each face
+        """
         # Nodes
         self.node_xy = np.stack((self.node_x, self.node_y),-1)
+        self.num_nodes = self.node_x.shape[0]
+        self.boundary_nodes = self.node_xy[np.array(list(set(self.edge_index.T[self.edge_type > 1].flatten())))]
         
         # Edges        
         self.edge_relative_distance = self.node_xy[self.edge_index[1,:]] - self.node_xy[self.edge_index[0,:]]
@@ -322,9 +393,16 @@ class Mesh(object):
 
         self.edge_outward_normal = self.edge_relative_distance/self.edge_length[:,None]
         self.edge_outward_normal[:,1] = -self.edge_outward_normal[:,1]
+        self.num_edges = self.edge_index.shape[1]
 
         # Faces
         self.face_xy = np.stack((self.face_x, self.face_y),-1)
+        self.face_relative_distance = (self.face_xy[self.dual_edge_index[1,:]] - self.face_xy[self.dual_edge_index[0,:]])/100
+        self.dual_edge_length = np.linalg.norm(self.face_relative_distance, axis=1)
+        self.num_faces = self.face_x.shape[0]
+
+        self.dual_edge_outward_normal = self.face_relative_distance/self.dual_edge_length[:,None]
+        self.dual_edge_outward_normal[:,1] = -self.dual_edge_outward_normal[:,1]
 
         node_position = 0
         face_areas = []
@@ -334,10 +412,12 @@ class Mesh(object):
             face_nodes_y = self.node_y[face_node]
             node_position += num_nodes
             face_area = get_polygon_area(face_nodes_x, face_nodes_y)
+            if face_area == 0: raise ValueError(f"Face {face_node} has area equal to zero")
             face_areas.append(face_area)
         self.face_area = np.array(face_areas)
 
     def _import_DEM(self, DEM_file):
+        """
         DEM = np.loadtxt(DEM_file)
         ####################### Normalization
         # Calculate the minimum and maximum elevation values
@@ -354,12 +434,25 @@ class Mesh(object):
         #If you want to normalize DEM use this line:
         self.DEM = interpolate_variable(self.face_xy, normalized_DEM[:, :2], normalized_DEM[:, 2], method='nearest')
         #If you want the normal DEM use this:
-        #self.DEM = interpolate_variable(self.face_xy, DEM[:,:2], DEM[:,2], method='nearest')
+        #self.DEM = interpolate_variable(self.face_xy, DEM[:,:2], DEM[:,2], method='nearest')'
+        
+        -------------------------
+        Import DEM file and interpolate it on the mesh ROBERTOS NEW CODE!!!!!!!!!!
+        ------
+        DEM_file: str, path-like
+            path to DEM file. It must be a file with three columns: x, y, z
+        """
+        try:
+            DEM = np.loadtxt(DEM_file)
+            self.DEM = interpolate_variable(self.face_xy, DEM[:,:2], DEM[:,2], method='nearest')
+        except FileNotFoundError:
+            print(f"Could not find the DEM file {DEM_file}. Setting DEM to zeros.")
+            self.DEM = np.zeros_like(self.face_area)        
 
     def __repr__(self) -> str:
-        return 'Mesh object with {} nodes, {} edges, and {} faces'.format(
-            self.node_x.shape[0], self.edge_index.shape[1], self.face_x.shape[0])
-
+        return 'Mesh object with {} nodes, {} edges, {} faces, and {} dual edges'.format(
+            self.node_x.shape[0], self.edge_index.shape[1], self.face_x.shape[0], self.dual_edge_index.shape[1])
+    
 def get_corners(pos):
     '''
     Returns the coordinates of the corners of a grid
@@ -454,7 +547,7 @@ def graph_to_mesh_interpolation_error(original, interpolated, pos, graph, mesh, 
     fig, axs = plt.subplots(1,2, figsize=(18,6))
 
     grid_nodes = get_coords(pos)
-    mesh_nodes = mesh.mesh2d_nodes
+    mesh_nodes = mesh.Mesh2d_nodes
     back_to_grid = griddata(mesh_nodes, interpolated, grid_nodes, method=method)
 
 	# Spatial distribution
@@ -744,9 +837,9 @@ def create_mesh_dataset(dataset_folder, n_sim, start_sim=1):
         
         data.pos = torch.FloatTensor(mesh.face_xy)
         data.edge_index = torch.LongTensor(mesh.dual_edge_index)
-        data.edge_distance = torch.FloatTensor(mesh.edge_length[mesh.edge_type < 3])
-        data.edge_relative_distance = torch.FloatTensor(mesh.edge_relative_distance[mesh.edge_type < 3])
-        data.normal = torch.FloatTensor(mesh.edge_outward_normal[mesh.edge_type < 3])
+        data.edge_distance = torch.FloatTensor(mesh.dual_edge_length)
+        data.edge_relative_distance = torch.FloatTensor(mesh.face_relative_distance)
+        data.normal = torch.FloatTensor(mesh.dual_edge_outward_normal)
         data.num_nodes = mesh.face_x.shape[0]
         data.area = torch.FloatTensor(mesh.face_area)
 
